@@ -16,15 +16,15 @@
        ========================================================================== */
     :root {
       --obsidian-deep: #070504;
-      --obsidian-card: rgba(22, 15, 11, 0.72);
-      --obsidian-card-alt: rgba(30, 21, 16, 0.65);
+      --obsidian-card: rgba(22, 15, 11, 0.78);
+      --obsidian-card-alt: rgba(30, 21, 16, 0.7);
       
       --champagne: #e5c59f;
       --champagne-bright: #fae7cf;
       --champagne-dark: #b88f63;
       --champagne-glow: rgba(229, 197, 159, 0.22);
       
-      --wood-rim: rgba(229, 197, 159, 0.12);
+      --wood-rim: rgba(229, 197, 159, 0.14);
       --wood-rim-hover: rgba(229, 197, 159, 0.35);
       
       --text-silk: #faf6f0;
@@ -48,12 +48,11 @@
       font-family: var(--font-body);
       font-size: 13.5px;
       line-height: 1.6;
-      padding: 2.5rem 1.25rem;
+      padding: 1.5rem 1rem;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      /* Ambient luxury backlighting & fine woodgrain sheen */
       background-image: 
         radial-gradient(900px circle at 50% -5%, rgba(229, 197, 159, 0.08), transparent 70%),
         radial-gradient(600px circle at 15% 45%, rgba(85, 48, 28, 0.16), transparent 60%),
@@ -63,20 +62,20 @@
 
     .vault-shell {
       width: 100%;
-      max-width: 1020px;
+      max-width: 900px;
       display: flex;
       flex-direction: column;
-      gap: 2rem;
+      gap: 1.4rem;
       z-index: 1;
     }
 
-    /* Horology-Grade HUD Bar */
+    /* Top HUD */
     .hud-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.75rem 1.5rem;
-      background: rgba(18, 12, 9, 0.75);
+      padding: 0.65rem 1.25rem;
+      background: rgba(18, 12, 9, 0.82);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--wood-rim);
@@ -89,7 +88,7 @@
 
     .hud-tags {
       display: flex;
-      gap: 1.5rem;
+      gap: 1.25rem;
       flex-wrap: wrap;
     }
 
@@ -112,47 +111,96 @@
       font-weight: 500;
     }
 
+    /* Window Navigation Bar */
+    .window-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(28, 19, 14, 0.7);
+      border: 1px solid var(--wood-rim);
+      border-radius: 8px;
+      padding: 0.4rem 0.6rem;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .window-nav-links {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    .nav-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.35rem 0.85rem;
+      border-radius: 5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .nav-btn:hover {
+      color: var(--champagne);
+      border-color: rgba(229, 197, 159, 0.2);
+      background: rgba(229, 197, 159, 0.06);
+    }
+
+    .nav-btn.active {
+      color: #120c08;
+      background: var(--champagne);
+      border-color: var(--champagne-bright);
+      font-weight: 700;
+      box-shadow: 0 0 10px var(--champagne-glow);
+    }
+
     /* Header Banner */
     .header-banner {
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
+      align-items: center;
       border-bottom: 1px solid rgba(229, 197, 159, 0.12);
-      padding-bottom: 1.5rem;
+      padding-bottom: 1rem;
     }
 
     .brand-group {
       display: flex;
       align-items: center;
-      gap: 1.25rem;
+      gap: 1rem;
     }
 
     .brand-seal {
-      width: 48px;
-      height: 48px;
-      border-radius: 10px;
+      width: 44px;
+      height: 44px;
+      border-radius: 9px;
       background: linear-gradient(135deg, #2b1c13 0%, #150d09 100%);
       border: 1px solid var(--champagne-dark);
       display: flex;
       align-items: center;
       justify-content: center;
       color: var(--champagne);
-      box-shadow: 0 4px 14px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+      flex-shrink: 0;
     }
 
     .brand-seal svg {
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       stroke: var(--champagne);
     }
 
     .brand-title h1 {
       font-family: var(--font-display);
-      font-size: 2.1rem;
+      font-size: 1.65rem;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
       color: var(--text-silk);
-      text-shadow: 0 2px 10px rgba(0,0,0,0.8);
       line-height: 1.1;
     }
 
@@ -164,8 +212,8 @@
 
     .brand-title p {
       color: var(--text-muted);
-      font-size: 0.82rem;
-      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      margin-top: 0.15rem;
       letter-spacing: 0.03em;
     }
 
@@ -173,36 +221,83 @@
       background: rgba(196, 77, 61, 0.08);
       color: #df7062;
       border: 1px solid rgba(196, 77, 61, 0.3);
-      padding: 0.55rem 1.1rem;
+      padding: 0.45rem 0.95rem;
       font-family: var(--font-mono);
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       font-weight: 600;
       letter-spacing: 0.04em;
       cursor: pointer;
       border-radius: 6px;
       transition: all 0.25s ease;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
 
     .wipe-btn:hover {
       background: var(--crimson-accent);
       color: #fff;
       border-color: var(--crimson-accent);
-      box-shadow: 0 0 16px rgba(196, 77, 61, 0.4);
-      transform: translateY(-1px);
+      box-shadow: 0 0 14px rgba(196, 77, 61, 0.4);
     }
 
-    /* Workspace Architecture */
-    .workspace {
+    /* Views Architecture */
+    .view-container {
+      display: none;
+      width: 100%;
+    }
+
+    .view-container.active {
+      display: block;
+      animation: fadeIn 0.25s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Gateway / Hub View */
+    .gateway-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 2rem;
+      gap: 1.5rem;
+      margin: 1rem 0;
     }
 
-    @media (max-width: 880px) {
-      .workspace { grid-template-columns: 1fr; }
+    @media (max-width: 680px) {
+      .gateway-grid { grid-template-columns: 1fr; }
     }
 
+    .gateway-card {
+      background: var(--obsidian-card);
+      border: 1px solid var(--wood-rim);
+      border-radius: 12px;
+      padding: 2rem 1.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+      position: relative;
+      transition: all 0.3s ease;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+    }
+
+    .gateway-card:hover {
+      border-color: var(--champagne);
+      box-shadow: 0 0 25px var(--champagne-glow);
+      transform: translateY(-2px);
+    }
+
+    .gateway-card h2 {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      color: var(--text-silk);
+    }
+
+    .gateway-card p {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+
+    /* Atelier Card (Single Window Card) */
     .atelier-card {
       background: var(--obsidian-card);
       backdrop-filter: blur(24px);
@@ -212,19 +307,13 @@
       padding: 1.75rem;
       display: flex;
       flex-direction: column;
-      gap: 1.4rem;
+      gap: 1.3rem;
       position: relative;
       box-shadow: 
         inset 0 1px 0 rgba(229, 197, 159, 0.15),
         0 20px 40px rgba(0, 0, 0, 0.6);
-      transition: border-color 0.3s ease;
     }
 
-    .atelier-card:hover {
-      border-color: rgba(229, 197, 159, 0.22);
-    }
-
-    /* Corner Accent Inlays */
     .atelier-card::before {
       content: "";
       position: absolute;
@@ -245,7 +334,7 @@
 
     .card-title {
       font-family: var(--font-display);
-      font-size: 1.12rem;
+      font-size: 1.25rem;
       font-weight: 600;
       letter-spacing: 0.05em;
       color: var(--text-silk);
@@ -263,11 +352,11 @@
       text-transform: uppercase;
     }
 
-    /* Form Design */
+    /* Form Fields */
     .field-group {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.45rem;
     }
 
     .field-label {
@@ -286,7 +375,6 @@
       font-weight: 500;
     }
 
-    /* Chiseled Recessed Inputs */
     input[type="text"], input[type="password"], textarea {
       width: 100%;
       background: rgba(10, 7, 5, 0.85);
@@ -314,7 +402,7 @@
       line-height: 1.6;
     }
 
-    /* Marquetry Tray Drop-Zone with Live Thumbnail */
+    /* Marquetry Drop-Zone */
     .drop-zone {
       border: 1.5px dashed rgba(229, 197, 159, 0.2);
       background: linear-gradient(180deg, rgba(12, 8, 6, 0.8) 0%, rgba(20, 14, 10, 0.8) 100%);
@@ -326,12 +414,12 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
+      gap: 0.45rem;
       position: relative;
       overflow: hidden;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.25s ease;
       box-shadow: inset 0 2px 10px rgba(0,0,0,0.6);
-      min-height: 108px;
+      min-height: 110px;
     }
 
     .drop-zone:hover, .drop-zone.dragover {
@@ -341,8 +429,8 @@
     }
 
     .drop-thumbnail-preview {
-      width: 44px;
-      height: 44px;
+      width: 48px;
+      height: 48px;
       border-radius: 6px;
       object-fit: cover;
       border: 1px solid var(--champagne);
@@ -351,8 +439,8 @@
     }
 
     .drop-zone-icon {
-      width: 28px;
-      height: 28px;
+      width: 26px;
+      height: 26px;
       stroke: var(--champagne-dark);
       stroke-width: 1.5;
       fill: none;
@@ -385,7 +473,7 @@
       height: 100%;
     }
 
-    /* Capacity Gauge */
+    /* Capacity Bar */
     .capacity-container {
       display: flex;
       flex-direction: column;
@@ -413,7 +501,7 @@
       box-shadow: 0 0 10px var(--champagne-glow);
     }
 
-    /* Haute-Horlogerie Gold Titanium Buttons */
+    /* Action Buttons */
     .action-btn {
       background: linear-gradient(135deg, #f5dfc6 0%, #d8ae80 50%, #ae8052 100%);
       color: #120c08;
@@ -462,6 +550,9 @@
       cursor: pointer;
       box-shadow: 0 3px 8px rgba(0,0,0,0.4);
       transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
     }
 
     .sec-btn:hover {
@@ -471,7 +562,7 @@
       box-shadow: 0 0 10px var(--champagne-glow);
     }
 
-    /* Diagnostics & Telemetry Screen */
+    /* Diagnostics Panel */
     .diagnostics-panel {
       background: rgba(11, 7, 5, 0.85);
       backdrop-filter: blur(20px);
@@ -489,18 +580,18 @@
       justify-content: space-between;
       align-items: center;
       background: rgba(22, 15, 11, 0.85);
-      padding: 0.75rem 1.4rem;
+      padding: 0.65rem 1.25rem;
       border-bottom: 1px solid rgba(229, 197, 159, 0.1);
-      font-size: 0.76rem;
+      font-size: 0.74rem;
     }
 
     .terminal-view {
-      padding: 1.25rem 1.4rem;
-      min-height: 155px;
-      max-height: 210px;
+      padding: 1rem 1.25rem;
+      min-height: 120px;
+      max-height: 180px;
       overflow-y: auto;
       font-family: var(--font-mono);
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       color: #dfba8e;
       display: flex;
       flex-direction: column;
@@ -510,7 +601,7 @@
 
     .log-line {
       display: flex;
-      gap: 0.75rem;
+      gap: 0.65rem;
       word-break: break-all;
     }
 
@@ -554,15 +645,15 @@
       border-radius: 12px;
       width: 100%;
       max-width: 680px;
-      padding: 1.75rem;
+      padding: 1.5rem;
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
+      gap: 1.1rem;
     }
 
     .inspector-canvas-wrap {
       width: 100%;
-      max-height: 400px;
+      max-height: 380px;
       overflow: auto;
       border: 1px solid rgba(229, 197, 159, 0.15);
       background: #000;
@@ -613,7 +704,7 @@
         </div>
         <div class="brand-title">
           <h1>Stegano<span>Vault</span></h1>
-          <p>Artisan Obsidian Cryptography // Sovereign Client-Side Chamber</p>
+          <p>Artisan Obsidian Cryptography // Sovereign Window Chambers</p>
         </div>
       </div>
       <button type="button" class="wipe-btn" id="panic-btn" title="Purge session buffers">
@@ -621,14 +712,69 @@
       </button>
     </header>
 
-    <!-- Two-Panel Workspace -->
-    <main class="workspace">
-      
-      <!-- ENCRYPT PANEL -->
-      <section class="atelier-card">
+    <!-- Window Navigation Toolbar -->
+    <nav class="window-nav">
+      <div class="window-nav-links">
+        <a href="#hub" class="nav-btn" id="nav-hub">◈ Vault Gateway</a>
+        <a href="#deposit" class="nav-btn" id="nav-deposit">[01] Deposit Window</a>
+        <a href="#retrieve" class="nav-btn" id="nav-retrieve">[02] Retrieve Window</a>
+      </div>
+      <div>
+        <button type="button" class="sec-btn" id="btn-popout" title="Open active chamber into its own independent OS browser window">
+          ⤢ Pop Out to New Window
+        </button>
+      </div>
+    </nav>
+
+    <!-- ======================================================================
+         VIEW 1: GATEWAY (MASTER HUB)
+         ====================================================================== -->
+    <section id="view-hub" class="view-container">
+      <div class="gateway-grid">
+        <!-- Deposit Launcher -->
+        <div class="gateway-card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>[01] Deposit Chamber</h2>
+            <span class="card-badge">ENCODE</span>
+          </div>
+          <p>
+            Embed confidential inscriptions inside high-res image carriers using AES-256-GCM encryption and non-linear coprime pixel dispersal.
+          </p>
+          <div style="margin-top:auto; display:flex; gap:0.6rem;">
+            <button type="button" class="action-btn" style="flex:1;" onclick="SteganoApp.openInNewWindow('deposit')">
+              Launch in New Window ↗
+            </button>
+            <a href="#deposit" class="sec-btn">Open Here</a>
+          </div>
+        </div>
+
+        <!-- Retrieve Launcher -->
+        <div class="gateway-card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>[02] Retrieve Chamber</h2>
+            <span class="card-badge">DECODE</span>
+          </div>
+          <p>
+            Reconstruct and decrypt confidential payloads from sealed stego carriers. Includes live bit-plane 0 forensic static inspection.
+          </p>
+          <div style="margin-top:auto; display:flex; gap:0.6rem;">
+            <button type="button" class="action-btn" style="flex:1;" onclick="SteganoApp.openInNewWindow('retrieve')">
+              Launch in New Window ↗
+            </button>
+            <a href="#retrieve" class="sec-btn">Open Here</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         VIEW 2: DEPOSIT CHAMBER
+         ====================================================================== -->
+    <section id="view-deposit" class="view-container">
+      <div class="atelier-card">
         <header class="card-header">
-          <h2 class="card-title">[01] Deposit Payload</h2>
-          <span class="card-badge">DISPERSE</span>
+          <h2 class="card-title">[01] Deposit Payload Chamber</h2>
+          <span class="card-badge">DISPERSAL_ENGINE</span>
         </header>
 
         <form id="encode-form" onsubmit="return false;" class="field-group">
@@ -683,16 +829,20 @@
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
               <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
-            Encrypt, Disperse &amp; Seal
+            Encrypt, Disperse &amp; Seal Carrier
           </button>
         </form>
-      </section>
+      </div>
+    </section>
 
-      <!-- DECRYPT PANEL -->
-      <section class="atelier-card">
+    <!-- ======================================================================
+         VIEW 3: RETRIEVE CHAMBER
+         ====================================================================== -->
+    <section id="view-retrieve" class="view-container">
+      <div class="atelier-card">
         <header class="card-header">
-          <h2 class="card-title">[02] Retrieve Payload</h2>
-          <span class="card-badge">RECONSTRUCT</span>
+          <h2 class="card-title">[02] Retrieve Payload Chamber</h2>
+          <span class="card-badge">EXTRACTION_ENGINE</span>
         </header>
 
         <form id="decode-form" onsubmit="return false;" class="field-group">
@@ -743,14 +893,13 @@
             <textarea id="decode-text" readonly placeholder="Decrypted cleartext will be revealed here..." style="color:var(--champagne-bright); min-height:90px;"></textarea>
           </div>
         </form>
-      </section>
-
-    </main>
+      </div>
+    </section>
 
     <!-- Diagnostics Terminal -->
     <section class="diagnostics-panel">
       <div class="diag-toolbar">
-        <span style="color:var(--champagne); font-family:var(--font-display); font-size:0.85rem; letter-spacing:0.04em;">// VAULT_LOG &amp; ENTROPY_ANALYSIS</span>
+        <span style="color:var(--champagne); font-family:var(--font-display); font-size:0.85rem; letter-spacing:0.04em;">// VAULT_LOG &amp; TELEMETRY</span>
         <span id="entropy-tag" style="color:var(--text-muted); font-family:var(--font-mono);">Entropy: N/A</span>
       </div>
       <div class="terminal-view" id="terminal-out">
@@ -772,7 +921,7 @@
         <button type="button" class="sec-btn" id="modal-close-btn">[CLOSE]</button>
       </div>
       <p style="font-size:0.78rem; color:var(--text-muted);">
-        Visualizing Bit-Plane 0 (LSB &times; 255). Natural images feature soft organic gradients; scattered ciphertext will appear as fine, homogeneous static noise.
+        Visualizing Bit-Plane 0 (LSB &times; 255). Natural images feature smooth gradients; scattered ciphertext will appear as fine, homogeneous static noise.
       </p>
       <div class="inspector-canvas-wrap">
         <canvas id="inspector-canvas"></canvas>
@@ -782,7 +931,7 @@
 
   <!-- JavaScript Engine -->
   <script>
-    (function () {
+    const SteganoApp = (function () {
       'use strict';
 
       /* --- Protocol Constants --- */
@@ -792,7 +941,7 @@
       const IV_SIZE = 12;
       const HEADER_SIZE = 36; // 4B Magic + 4B Length + 16B Salt + 12B IV
 
-      /* --- Terminal Logger --- */
+      /* --- Logger --- */
       const termOut = document.getElementById('terminal-out');
       function log(tag, msg, isError = false) {
         const line = document.createElement('div');
@@ -960,7 +1109,67 @@
         });
       }
 
-      /* --- DOM References --- */
+      /* --- Navigation & Window Popout System --- */
+      const views = {
+        hub: document.getElementById('view-hub'),
+        deposit: document.getElementById('view-deposit'),
+        retrieve: document.getElementById('view-retrieve')
+      };
+
+      const navBtns = {
+        hub: document.getElementById('nav-hub'),
+        deposit: document.getElementById('nav-deposit'),
+        retrieve: document.getElementById('nav-retrieve')
+      };
+
+      function getCurrentRoute() {
+        const hash = window.location.hash.replace('#', '').toLowerCase();
+        if (hash === 'deposit' || hash === 'retrieve') return hash;
+        return 'hub';
+      }
+
+      function applyRoute() {
+        const route = getCurrentRoute();
+        Object.keys(views).forEach(k => {
+          if (k === route) {
+            views[k].classList.add('active');
+            navBtns[k].classList.add('active');
+          } else {
+            views[k].classList.remove('active');
+            navBtns[k].classList.remove('active');
+          }
+        });
+        log('WINDOW', `Chamber switched to: [${route.toUpperCase()}]`);
+      }
+
+      window.addEventListener('hashchange', applyRoute);
+
+      function openInNewWindow(chamberName) {
+        const url = window.location.href.split('#')[0] + '#' + chamberName;
+        const title = `VaultChamber_${chamberName}`;
+        const win = window.open(
+          url,
+          title,
+          'width=720,height=880,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes'
+        );
+        if (win) {
+          win.focus();
+          log('WINDOW', `Launched ${chamberName.toUpperCase()} in independent OS window.`);
+        } else {
+          log('WARN', 'Popup blocked by browser. Please allow popups or use in-tab navigation.', true);
+        }
+      }
+
+      document.getElementById('btn-popout').addEventListener('click', () => {
+        const cur = getCurrentRoute();
+        if (cur === 'hub') {
+          openInNewWindow('deposit');
+        } else {
+          openInNewWindow(cur);
+        }
+      });
+
+      /* --- DOM Elements & Bindings --- */
       const carrierInput = document.getElementById('carrier-input');
       const targetInput = document.getElementById('target-input');
       const encodeDropZone = document.getElementById('encode-drop-zone');
@@ -1036,14 +1245,13 @@
 
       encodeText.addEventListener('input', updateCapacity);
 
-      // Handle Carrier Image Selection with Thumbnail Preview
+      // Carrier Image Selection
       bindDropZone(encodeDropZone, carrierInput, async (file) => {
         try {
           currentCarrierImg = await loadImageFromFile(file);
           document.getElementById('encode-filename').textContent = file.name;
           document.getElementById('encode-img-meta').textContent = `${currentCarrierImg.naturalWidth}x${currentCarrierImg.naturalHeight}`;
           
-          // Display live miniature thumbnail
           encodeThumb.src = URL.createObjectURL(file);
           encodeThumb.style.display = 'block';
           encodeIcon.style.display = 'none';
@@ -1055,14 +1263,14 @@
           ctx.drawImage(currentCarrierImg, 0, 0);
           const h = calculateEntropy(ctx.getImageData(0, 0, cvs.width, cvs.height));
           entropyTag.textContent = `Carrier Entropy: ${h} bits/byte`;
-          log('ATELIER', `Carrier mounted: ${file.name} (${currentCarrierImg.naturalWidth}x${currentCarrierImg.naturalHeight}). Entropy: ${h}`);
+          log('DEPOSIT', `Carrier mounted: ${file.name} (${currentCarrierImg.naturalWidth}x${currentCarrierImg.naturalHeight}). Entropy: ${h}`);
           updateCapacity();
         } catch (e) {
           log('ERR', e.message, true);
         }
       });
 
-      // Handle Target Image Selection with Thumbnail Preview
+      // Target Image Selection
       bindDropZone(decodeDropZone, targetInput, async (file) => {
         try {
           currentTargetImg = await loadImageFromFile(file);
@@ -1073,7 +1281,7 @@
           decodeThumb.style.display = 'block';
           decodeIcon.style.display = 'none';
 
-          log('TARGET', `Carrier mounted for extraction: ${file.name}`);
+          log('RETRIEVE', `Carrier mounted for extraction: ${file.name}`);
         } catch (e) {
           log('ERR', e.message, true);
         }
@@ -1085,7 +1293,7 @@
           if (!currentCarrierImg) throw new Error('Carrier image must be mounted in tray.');
           const text = encodeText.value.trim();
           const pass = encodePass.value;
-          if (!text) throw new Error('Secret parchment payload cannot be empty.');
+          if (!text) throw new Error('Secret inscription payload cannot be empty.');
           if (!pass) throw new Error('Master passkey is required.');
 
           btnEncode.disabled = true;
@@ -1093,7 +1301,6 @@
 
           const { salt, iv, ciphertext } = await CryptoEngine.encrypt(text, pass);
 
-          // Build Packet: [4B Magic 'STGX'] + [4B Length] + [16B Salt] + [12B IV] + [Ciphertext]
           const packet = new Uint8Array(HEADER_SIZE + ciphertext.length);
           packet.set(MAGIC, 0);
           new DataView(packet.buffer).setUint32(4, ciphertext.length, false);
@@ -1179,7 +1386,6 @@
           const prngSeed = await CryptoEngine.derivePrngSeed(pass);
           const { offset, step } = PermutationEngine.getParams(totalSlots, prngSeed);
 
-          // Step 1: Read Header (36 bytes = 288 bits)
           const headerBytes = new Uint8Array(HEADER_SIZE);
           let bitCounter = 0;
           for (let i = 0; i < HEADER_SIZE; i++) {
@@ -1192,7 +1398,6 @@
             headerBytes[i] = byte;
           }
 
-          // Step 2: Validate Magic Header Signature
           for (let i = 0; i < 4; i++) {
             if (headerBytes[i] !== MAGIC[i]) {
               throw new Error('Invalid signature. Wrong passkey, non-vault carrier, or corrupted data.');
@@ -1209,7 +1414,6 @@
             throw new Error('Carrier packet damaged or length header invalid.');
           }
 
-          // Step 3: Extract Ciphertext bits
           const ciphertext = new Uint8Array(ciphertextLen);
           for (let i = 0; i < ciphertextLen; i++) {
             let byte = 0;
@@ -1305,6 +1509,12 @@
         document.getElementById('zulu-clock').textContent = new Date().toTimeString().split(' ')[0] + ' UTC';
       }, 1000);
 
+      // Initialize Route
+      applyRoute();
+
+      return {
+        openInNewWindow
+      };
     })();
   </script>
 </body>
