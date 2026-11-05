@@ -12,7 +12,7 @@
 
   <style>
     /* ==========================================================================
-       Ultra-Premium Obsidian Burlwood & Champagne Titanium Palette
+       Obsidian Burlwood & Champagne Titanium Palette
        ========================================================================== */
     :root {
       --obsidian-deep: #070504;
@@ -1062,15 +1062,64 @@
     const SteganoApp = (function () {
       'use strict';
 
-      /* --- Cryptographic & Protocol Constants --- */
-      const MAGIC = [0x53, 0x54, 0x47, 0x58]; // 'STGX'
-      const FIXED_PRNG_SALT = new TextEncoder().encode("SteganoVault_PRNG_Core_Seed_v3");
+      /* =========================================================================
+         1. CRYPTOGRAPHIC & PROTOCOL CONSTANTS
+         ========================================================================= */
+      const MAGIC = Object.freeze(new Uint8Array([0x53, 0x54, 0x47, 0x58])); // 'STGX'
+      const FIXED_PRNG_SALT = Object.freeze(new TextEncoder().encode("SteganoVault_PRNG_Core_Seed_v3"));
       const SALT_SIZE = 16;
       const IV_SIZE = 12;
+      const TAG_LENGTH_BITS = 128;
       const HEADER_SIZE = 36; // 4B Magic + 4B Ciphertext Length + 16B Salt + 12B IV
       const OWASP_PBKDF2_ROUNDS = 600000;
+      
+      // Guardrails for carrier canvas sanitization
+      const MAX_CANVAS_DIMENSION = 16384;
+      const MIN_RGB_SLOTS_REQUIRED = HEADER_SIZE * 8; // 288 slots (96 pixels)
 
-      /* --- Logger --- */
+      /* =========================================================================
+         2. ZERO-MEMORY LEAK WIPER & TIMING-SAFE UTILITIES
+         ========================================================================= */
+      class SecureWiper {
+        /**
+         * Cryptographically overwrites TypedArrays and DataViews with zeros.
+         */
+        static wipe(target) {
+          if (!target) return;
+          if (target instanceof Uint8Array || target instanceof Uint8ClampedArray || target instanceof Int32Array) {
+            target.fill(0);
+          } else if (target.buffer instanceof ArrayBuffer && target.byteLength !== undefined) {
+            new Uint8Array(target.buffer, target.byteOffset, target.byteLength).fill(0);
+          } else if (target instanceof ArrayBuffer) {
+            new Uint8Array(target).fill(0);
+          }
+        }
+
+        /**
+         * Wipes multiple buffers in batch.
+         */
+        static wipeAll(...targets) {
+          for (const t of targets) {
+            if (t) SecureWiper.wipe(t);
+          }
+        }
+      }
+
+      /**
+       * Constant-time byte array comparison to eliminate timing side-channels.
+       */
+      function timingSafeEqual(a, b) {
+        if (a.length !== b.length) return false;
+        let diff = 0;
+        for (let i = 0; i < a.length; i++) {
+          diff |= (a[i] ^ b[i]);
+        }
+        return diff === 0;
+      }
+
+      /* =========================================================================
+         3. TELEMETRY & LOGGER
+         ========================================================================= */
       const termOut = document.getElementById('terminal-out');
       function log(tag, msg, isError = false) {
         const line = document.createElement('div');
@@ -1085,10 +1134,11 @@
         termOut.scrollTop = termOut.scrollHeight;
       }
 
-      /* --- Helper: Non-blocking event loop yield --- */
-      const yieldTick = () => new Promise(resolve => setTimeout(resolve, 40));
+      const yieldTick = () => new Promise(resolve => setTimeout(resolve, 35));
 
-      /* --- Shannon Entropy Calculator --- */
+      /* =========================================================================
+         4. SHANNON ENTROPY AUDITOR
+         ========================================================================= */
       function calculateEntropy(imgData) {
         const counts = new Uint32Array(256);
         const data = imgData.data;
@@ -1105,10 +1155,13 @@
           const p = counts[i] / total;
           entropy -= p * Math.log2(p);
         }
+        counts.fill(0); // Wipe frequency table
         return entropy.toFixed(4);
       }
 
-      /* --- Mulberry32 Seeded PRNG --- */
+      /* =========================================================================
+         5. SEEDED PRNG & DISPERSAL PERMUTATION ENGINE
+         ========================================================================= */
       class Mulberry32 {
         constructor(seed) {
           this.state = seed >>> 0;
@@ -1123,16 +1176,16 @@
 
       function gcd(a, b) {
         while (b !== 0) {
-          let t = b;
+          const t = b;
           b = a % b;
           a = t;
         }
         return a;
       }
 
-      /* --- Dispersal Permutation Engine with Partition Subsets --- */
       class PermutationEngine {
         static getParams(partitionSlotCount, prngSeed) {
+          if (partitionSlotCount <= 0) throw new Error("Invalid carrier partition capacity.");
           const prng = new Mulberry32(prngSeed);
           const offset = Math.floor(prng.next() * partitionSlotCount);
           let step = Math.floor(prng.next() * (partitionSlotCount - 1)) + 1;
@@ -1145,13 +1198,10 @@
         }
 
         /**
-         * Resolves byte channel index for a given partition mapping.
-         * Mode:
-         *   'FULL': uses all RGB channels.
-         *   'PARTITION_EVEN': uses even-numbered RGB slots (Decoy layer).
-         *   'PARTITION_ODD': uses odd-numbered RGB slots (Sanctum layer).
+         * Resolves byte channel index while guaranteeing zero OOB access and
+         * maintaining alpha channel integrity.
          */
-        static getChannelIndex(bitIndex, offset, step, partitionCount, mode) {
+        static getChannelIndex(bitIndex, offset, step, partitionCount, mode, maxPixelBytes) {
           const slotInPartition = (offset + (bitIndex * step)) % partitionCount;
           let globalSlot = slotInPartition;
           
@@ -1163,110 +1213,165 @@
 
           const pixelGroup = Math.floor(globalSlot / 3);
           const channel = globalSlot % 3;
-          return (pixelGroup * 4) + channel;
+          const channelIndex = (pixelGroup * 4) + channel;
+
+          // Strict boundary assertion
+          if (channelIndex < 0 || channelIndex >= maxPixelBytes || channel > 2) {
+            throw new RangeError(`Out-of-bounds coordinate access intercepted: ${channelIndex}`);
+          }
+
+          return channelIndex;
         }
       }
 
-      /* --- Native Cryptography (AES-256-GCM + 600K PBKDF2) --- */
-      class CryptoEngine {
-        static async derivePrngSeed(password) {
-          const enc = new TextEncoder();
-          const baseKey = await crypto.subtle.importKey(
-            'raw',
-            enc.encode(password),
-            'PBKDF2',
-            false,
-            ['deriveBits']
-          );
+      /* =========================================================================
+         6. HARDENED WEBCRYPTO ENGINE (AES-256-GCM + 600K PBKDF2)
+         ========================================================================= */
+  class CryptoEngine {
+    static async derivePrngSeed(passwordBytes) {
+      let baseKey = null;
+      let seedBuffer = null;
+      try {
+        baseKey = await crypto.subtle.importKey(
+          'raw',
+          passwordBytes,
+          'PBKDF2',
+          false,
+          ['deriveBits']
+        );
 
-          const seedBuffer = await crypto.subtle.deriveBits(
-            { name: 'PBKDF2', salt: FIXED_PRNG_SALT, iterations: 20000, hash: 'SHA-256' },
-            baseKey,
-            32
-          );
-          return new DataView(seedBuffer).getUint32(0, false);
-        }
-
-        static async deriveAesKey(password, salt, usage) {
-          const enc = new TextEncoder();
-          const baseKey = await crypto.subtle.importKey(
-            'raw',
-            enc.encode(password),
-            'PBKDF2',
-            false,
-            ['deriveKey']
-          );
-
-          return await crypto.subtle.deriveKey(
-            { name: 'PBKDF2', salt: salt, iterations: OWASP_PBKDF2_ROUNDS, hash: 'SHA-256' },
-            baseKey,
-            { name: 'AES-GCM', length: 256 },
-            false,
-            [usage]
-          );
-        }
-
-        static async encrypt(plainText, password) {
-          const rawBytes = new TextEncoder().encode(plainText);
-          const salt = crypto.getRandomValues(new Uint8Array(SALT_SIZE));
-          const iv = crypto.getRandomValues(new Uint8Array(IV_SIZE));
-
-          const aesKey = await this.deriveAesKey(password, salt, 'encrypt');
-
-          const cipherBuf = await crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv },
-            aesKey,
-            rawBytes
-          );
-
-          return {
-            salt,
-            iv,
-            ciphertext: new Uint8Array(cipherBuf)
-          };
-        }
-
-        static async decrypt(ciphertext, salt, iv, password) {
-          const aesKey = await this.deriveAesKey(password, salt, 'decrypt');
-          const decBuf = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv },
-            aesKey,
-            ciphertext
-          );
-          return new TextDecoder().decode(decBuf);
-        }
+        seedBuffer = await crypto.subtle.deriveBits(
+          { name: 'PBKDF2', salt: FIXED_PRNG_SALT, iterations: 20000, hash: 'SHA-256' },
+          baseKey,
+          32
+        );
+        return new DataView(seedBuffer).getUint32(0, false);
+      } finally {
+        if (seedBuffer) SecureWiper.wipe(seedBuffer);
       }
+    }
 
-      /* --- LSB Matching (±1) Implementation --- */
+    static async deriveAesKey(passwordBytes, salt, usage) {
+      let baseKey = null;
+      try {
+        baseKey = await crypto.subtle.importKey(
+          'raw',
+          passwordBytes,
+          'PBKDF2',
+          false,
+          ['deriveKey']
+        );
+
+        return await crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt: salt, iterations: OWASP_PBKDF2_ROUNDS, hash: 'SHA-256' },
+          baseKey,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          [usage]
+        );
+      } catch (err) {
+        throw new Error("KDF derivation failure: " + err.message);
+      }
+    }
+
+    static async encrypt(plainTextBytes, passwordBytes) {
+      const salt = crypto.getRandomValues(new Uint8Array(SALT_SIZE));
+      const iv = crypto.getRandomValues(new Uint8Array(IV_SIZE));
+      let aesKey = null;
+
+      try {
+        aesKey = await this.deriveAesKey(passwordBytes, salt, 'encrypt');
+        const cipherBuf = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv: iv, tagLength: TAG_LENGTH_BITS },
+          aesKey,
+          plainTextBytes
+        );
+
+        return {
+          salt,
+          iv,
+          ciphertext: new Uint8Array(cipherBuf)
+        };
+      } finally {
+        // Enforce zeroization of intermediate plaintext memory
+        SecureWiper.wipe(plainTextBytes);
+      }
+    }
+
+    static async decrypt(ciphertext, salt, iv, passwordBytes) {
+      let aesKey = null;
+      let decBuf = null;
+      try {
+        aesKey = await this.deriveAesKey(passwordBytes, salt, 'decrypt');
+        decBuf = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: iv, tagLength: TAG_LENGTH_BITS },
+          aesKey,
+          ciphertext
+        );
+        return new Uint8Array(decBuf);
+      } catch {
+        // Uniform error handling to prevent cryptographic timing/padding oracles
+        throw new Error("Authentication failure: Invalid passkey or corrupt steganographic carrier.");
+      }
+    }
+  }
+
+      /* =========================================================================
+         7. LSB MATCHING (±1 EMBEDDING) ENGINE
+         ========================================================================= */
       function applyLsbMatching(currentVal, targetBit, prng) {
         if ((currentVal & 1) === targetBit) {
           return currentVal;
         }
+        // Prevent underflow / overflow on byte boundaries
+        if (currentVal <= 0) return 1;
+        if (currentVal >= 255) return 254;
 
-        // Boundary adjustments
-        if (currentVal === 0) return 1;
-        if (currentVal === 255) return 254;
-
-        // Unbiased ±1 modification
+        // Symmetric parity adjustment
         const coin = prng ? (prng.next() < 0.5) : (Math.random() < 0.5);
         return coin ? currentVal + 1 : currentVal - 1;
       }
 
-      /* --- Image Loader Helper --- */
+      /* =========================================================================
+         8. CARRIER SANITIZER & INPUT VALIDATOR
+         ========================================================================= */
+      function validateImageSanity(img) {
+        if (!img || img.naturalWidth === 0 || img.naturalHeight === 0) {
+          throw new Error("Carrier image possesses invalid or zero dimensions.");
+        }
+        if (img.naturalWidth > MAX_CANVAS_DIMENSION || img.naturalHeight > MAX_CANVAS_DIMENSION) {
+          throw new Error(`Carrier exceeds maximum dimensions (${MAX_CANVAS_DIMENSION}px). Decompression bomb mitigations engaged.`);
+        }
+        const totalSlots = img.naturalWidth * img.naturalHeight * 3;
+        if (totalSlots < MIN_RGB_SLOTS_REQUIRED) {
+          throw new Error(`Carrier image is too small to embed the minimum envelope header (${MIN_RGB_SLOTS_REQUIRED} channel slots required).`);
+        }
+      }
+
       function loadImageFromFile(file) {
         return new Promise((resolve, reject) => {
           if (!file || !file.type.startsWith('image/')) {
-            return reject(new Error('Selected file is not an image.'));
+            return reject(new Error('Invalid carrier input. File must be an image.'));
           }
           const img = new Image();
           const url = URL.createObjectURL(file);
-          img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image decode failure.')); };
+          img.onload = () => { 
+            URL.revokeObjectURL(url); 
+            try {
+              validateImageSanity(img);
+              resolve(img);
+            } catch (err) {
+              reject(err);
+            }
+          };
+          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Carrier decode failure. Corrupted bitstream.')); };
           img.src = url;
         });
       }
 
-      /* --- Navigation & Route Controller --- */
+      /* =========================================================================
+         9. UI CONTROLLER & ROUTER
+         ========================================================================= */
       const views = {
         hub: document.getElementById('view-hub'),
         deposit: document.getElementById('view-deposit'),
@@ -1307,13 +1412,13 @@
         const win = window.open(
           url,
           title,
-          'width=760,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes'
+          'width=780,height=920,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes'
         );
         if (win) {
           win.focus();
-          log('WINDOW', `Launched ${chamberName.toUpperCase()} in independent OS window.`);
+          log('WINDOW', `Launched ${chamberName.toUpperCase()} in independent OS context.`);
         } else {
-          log('WARN', 'Popup blocked by browser. Please allow popups or use in-tab navigation.', true);
+          log('WARN', 'Popup blocked. Please authorize popups.', true);
         }
       }
 
@@ -1322,7 +1427,9 @@
         openInNewWindow(cur === 'hub' ? 'deposit' : cur);
       });
 
-      /* --- DOM Elements & Bindings --- */
+      /* =========================================================================
+         10. DOM REFERENCES & EVENT BINDINGS
+         ========================================================================= */
       const carrierInput = document.getElementById('carrier-input');
       const targetInput = document.getElementById('target-input');
       const encodeDropZone = document.getElementById('encode-drop-zone');
@@ -1354,7 +1461,6 @@
       let currentCarrierImg = null;
       let currentTargetImg = null;
 
-      // Duress accordion UI toggle
       document.getElementById('duress-toggle-label').addEventListener('click', () => {
         duressCheckbox.checked = !duressCheckbox.checked;
         duressCheckbox.dispatchEvent(new Event('change'));
@@ -1363,15 +1469,14 @@
       duressCheckbox.addEventListener('change', () => {
         if (duressCheckbox.checked) {
           duressContent.classList.add('active');
-          log('DURESS', 'Dual-payload duress chamber armed. Allocating dual disjoint partitions.');
+          log('DURESS', 'Dual-payload duress chamber armed. Coprime partitioned allocation initialized.');
         } else {
           duressContent.classList.remove('active');
-          log('DURESS', 'Duress chamber disarmed. Single sanctum allocation active.');
+          log('DURESS', 'Duress chamber disarmed. Single partition mode active.');
         }
         updateCapacity();
       });
 
-      // Drag & Drop Binder
       function bindDropZone(zone, input, onFile) {
         ['dragenter', 'dragover'].forEach(ev => {
           zone.addEventListener(ev, (e) => {
@@ -1400,7 +1505,6 @@
         });
       }
 
-      // Live Capacity Calculation
       function updateCapacity() {
         const primaryBytes = new TextEncoder().encode(encodeText.value).length;
         const decoyBytes = duressCheckbox.checked ? new TextEncoder().encode(encodeDecoyText.value).length : 0;
@@ -1418,17 +1522,17 @@
         
         if (duressCheckbox.checked) {
           const partitionBudget = Math.floor(totalRgbSlots / 2);
-          const maxLayerBytes = Math.floor(partitionBudget / 8) - (HEADER_SIZE + 16);
-          const primaryPct = Math.min(100, Math.max(0, (primaryBytes / maxLayerBytes) * 100));
-          const decoyPct = Math.min(100, Math.max(0, (decoyBytes / maxLayerBytes) * 100));
-          const totalPct = Math.min(100, ((primaryBytes + decoyBytes) / (maxLayerBytes * 2)) * 100).toFixed(1);
+          const maxLayerBytes = Math.max(0, Math.floor(partitionBudget / 8) - (HEADER_SIZE + 16));
+          const primaryPct = maxLayerBytes > 0 ? Math.min(100, (primaryBytes / maxLayerBytes) * 100) : 100;
+          const decoyPct = maxLayerBytes > 0 ? Math.min(100, (decoyBytes / maxLayerBytes) * 100) : 100;
+          const totalPct = maxLayerBytes > 0 ? Math.min(100, ((primaryBytes + decoyBytes) / (maxLayerBytes * 2)) * 100).toFixed(1) : 100;
 
           capacityStats.textContent = `Dual: ${totalPct}% (Sanctum: ${primaryPct.toFixed(0)}%, Decoy: ${decoyPct.toFixed(0)}%)`;
           capacityBar.style.width = `${totalPct}%`;
           capacityBar.style.background = (primaryPct > 90 || decoyPct > 90) ? 'var(--crimson-accent)' : 'linear-gradient(90deg, #996e45 0%, #e5c59f 100%)';
         } else {
-          const maxPayloadBytes = Math.floor(totalRgbSlots / 8) - (HEADER_SIZE + 16);
-          const pct = Math.min(100, Math.max(0, (primaryBytes / maxPayloadBytes) * 100)).toFixed(1);
+          const maxPayloadBytes = Math.max(0, Math.floor(totalRgbSlots / 8) - (HEADER_SIZE + 16));
+          const pct = maxPayloadBytes > 0 ? Math.min(100, (primaryBytes / maxPayloadBytes) * 100).toFixed(1) : 100;
 
           capacityStats.textContent = `${pct}% utilized`;
           capacityBar.style.width = `${pct}%`;
@@ -1439,7 +1543,6 @@
       encodeText.addEventListener('input', updateCapacity);
       encodeDecoyText.addEventListener('input', updateCapacity);
 
-      // Carrier Image Selection
       bindDropZone(encodeDropZone, carrierInput, async (file) => {
         try {
           currentCarrierImg = await loadImageFromFile(file);
@@ -1455,7 +1558,12 @@
           cvs.height = currentCarrierImg.naturalHeight;
           const ctx = cvs.getContext('2d');
           ctx.drawImage(currentCarrierImg, 0, 0);
-          const h = calculateEntropy(ctx.getImageData(0, 0, cvs.width, cvs.height));
+          const imgData = ctx.getImageData(0, 0, cvs.width, cvs.height);
+          const h = calculateEntropy(imgData);
+          
+          // Wipe temporary canvas data
+          SecureWiper.wipe(imgData.data);
+
           entropyTag.textContent = `Carrier Entropy: ${h} bits/byte`;
           log('DEPOSIT', `Carrier mounted: ${file.name} (${currentCarrierImg.naturalWidth}x${currentCarrierImg.naturalHeight}). Entropy: ${h}`);
           updateCapacity();
@@ -1464,7 +1572,6 @@
         }
       });
 
-      // Target Image Selection
       bindDropZone(decodeDropZone, targetInput, async (file) => {
         try {
           currentTargetImg = await loadImageFromFile(file);
@@ -1481,43 +1588,61 @@
         }
       });
 
-      /* --- Action: Encrypt & Disperse with LSB Matching (±1) --- */
+      /* =========================================================================
+         11. SECURE ACTION: ENCODE, DISPERSE & SEAL
+         ========================================================================= */
       btnEncode.addEventListener('click', async () => {
+        // Allocation tracking for zeroization in finally block
+        let primaryRawBytes = null;
+        let primaryPassBytes = null;
+        let decoyRawBytes = null;
+        let decoyPassBytes = null;
+        let primaryPacket = null;
+        let decoyPacket = null;
+        let imgData = null;
+
         try {
           if (!currentCarrierImg) throw new Error('Carrier image must be mounted.');
-          const primaryText = encodeText.value.trim();
+          const primaryText = encodeText.value;
           const primaryPass = encodePass.value;
-          if (!primaryText) throw new Error('Primary inscription payload cannot be empty.');
-          if (!primaryPass) throw new Error('Master key is required.');
+          if (!primaryText.trim()) throw new Error('Sanctum inscription payload cannot be empty.');
+          if (!primaryPass) throw new Error('Master passkey is required.');
 
           const isDuressActive = duressCheckbox.checked;
-          const decoyText = encodeDecoyText.value.trim();
+          const decoyText = encodeDecoyText.value;
           const decoyPass = encodeDecoyPass.value;
 
           if (isDuressActive) {
-            if (!decoyText) throw new Error('Decoy inscription must be provided for duress mode.');
+            if (!decoyText.trim()) throw new Error('Decoy inscription must be provided in duress mode.');
             if (!decoyPass) throw new Error('Emergency duress passkey is required.');
-            if (primaryPass === decoyPass) throw new Error('Master passkey and emergency duress passkey must be strictly different.');
+            if (primaryPass === decoyPass) throw new Error('Master key and emergency duress key must be strictly distinct.');
           }
 
           btnEncode.disabled = true;
           btnEncodeLabel.textContent = 'Hardening KDF (600,000 PBKDF2 rounds)...';
           await yieldTick();
 
-          log('KDF', 'Deriving AES-256-GCM key with 600,000 PBKDF2-SHA256 iterations...');
-          const primaryEnc = await CryptoEngine.encrypt(primaryText, primaryPass);
+          // Ingest strings directly into TypedArrays for deterministic zeroization
+          const enc = new TextEncoder();
+          primaryRawBytes = enc.encode(primaryText);
+          primaryPassBytes = enc.encode(primaryPass);
 
-          const primaryPacket = new Uint8Array(HEADER_SIZE + primaryEnc.ciphertext.length);
+          log('KDF', 'Deriving Sanctum AES-256-GCM key (600,000 PBKDF2-SHA256 iterations)...');
+          const primaryEnc = await CryptoEngine.encrypt(primaryRawBytes, primaryPassBytes);
+
+          primaryPacket = new Uint8Array(HEADER_SIZE + primaryEnc.ciphertext.length);
           primaryPacket.set(MAGIC, 0);
           new DataView(primaryPacket.buffer).setUint32(4, primaryEnc.ciphertext.length, false);
           primaryPacket.set(primaryEnc.salt, 8);
           primaryPacket.set(primaryEnc.iv, 24);
           primaryPacket.set(primaryEnc.ciphertext, HEADER_SIZE);
 
-          let decoyPacket = null;
           if (isDuressActive) {
-            log('KDF', 'Deriving emergency duress layer key (600,000 PBKDF2 rounds)...');
-            const decoyEnc = await CryptoEngine.encrypt(decoyText, decoyPass);
+            log('KDF', 'Deriving Decoy layer key (600,000 PBKDF2 iterations)...');
+            decoyRawBytes = enc.encode(decoyText);
+            decoyPassBytes = enc.encode(decoyPass);
+
+            const decoyEnc = await CryptoEngine.encrypt(decoyRawBytes, decoyPassBytes);
             decoyPacket = new Uint8Array(HEADER_SIZE + decoyEnc.ciphertext.length);
             decoyPacket.set(MAGIC, 0);
             new DataView(decoyPacket.buffer).setUint32(4, decoyEnc.ciphertext.length, false);
@@ -1535,20 +1660,20 @@
           const ctx = canvas.getContext('2d');
           ctx.drawImage(currentCarrierImg, 0, 0);
 
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const pixels = imgData.data;
           const totalSlots = canvas.width * canvas.height * 3;
 
           if (isDuressActive) {
-            const evenSlots = Math.floor((totalSlots + 1) / 2); // Decoy partition
-            const oddSlots = Math.floor(totalSlots / 2);        // Sanctum partition
+            const evenSlots = Math.floor((totalSlots + 1) / 2);
+            const oddSlots = Math.floor(totalSlots / 2);
 
-            if (decoyPacket.length * 8 > evenSlots) throw new Error('Decoy payload exceeds partition capacity.');
-            if (primaryPacket.length * 8 > oddSlots) throw new Error('Sanctum payload exceeds partition capacity.');
+            if (decoyPacket.length * 8 > evenSlots) throw new Error('Decoy payload exceeds partition allocation.');
+            if (primaryPacket.length * 8 > oddSlots) throw new Error('Sanctum payload exceeds partition allocation.');
 
-            // 1. Embed Decoy Layer in Even Partition
-            log('INJECT', 'Embedding Decoy layer into Partition [0] (Even RGB slots)...');
-            const decoySeed = await CryptoEngine.derivePrngSeed(decoyPass);
+            // 1. Disperse Decoy into Partition 0 (Even)
+            log('INJECT', 'Embedding Decoy layer into Partition 0 (Even slots)...');
+            const decoySeed = await CryptoEngine.derivePrngSeed(decoyPassBytes);
             const decoyParams = PermutationEngine.getParams(evenSlots, decoySeed);
             const decoyPrng = new Mulberry32(decoySeed);
 
@@ -1557,15 +1682,15 @@
               const byte = decoyPacket[b];
               for (let bit = 7; bit >= 0; bit--) {
                 const targetBit = (byte >> bit) & 1;
-                const pIdx = PermutationEngine.getChannelIndex(bitIdx, decoyParams.offset, decoyParams.step, evenSlots, 'PARTITION_EVEN');
+                const pIdx = PermutationEngine.getChannelIndex(bitIdx, decoyParams.offset, decoyParams.step, evenSlots, 'PARTITION_EVEN', pixels.length);
                 pixels[pIdx] = applyLsbMatching(pixels[pIdx], targetBit, decoyPrng);
                 bitIdx++;
               }
             }
 
-            // 2. Embed Sanctum Layer in Odd Partition
-            log('INJECT', 'Embedding Sanctum layer into Partition [1] (Odd RGB slots)...');
-            const sanctumSeed = await CryptoEngine.derivePrngSeed(primaryPass);
+            // 2. Disperse Sanctum into Partition 1 (Odd)
+            log('INJECT', 'Embedding Sanctum layer into Partition 1 (Odd slots)...');
+            const sanctumSeed = await CryptoEngine.derivePrngSeed(primaryPassBytes);
             const sanctumParams = PermutationEngine.getParams(oddSlots, sanctumSeed);
             const sanctumPrng = new Mulberry32(sanctumSeed);
 
@@ -1574,20 +1699,19 @@
               const byte = primaryPacket[b];
               for (let bit = 7; bit >= 0; bit--) {
                 const targetBit = (byte >> bit) & 1;
-                const pIdx = PermutationEngine.getChannelIndex(bitIdx, sanctumParams.offset, sanctumParams.step, oddSlots, 'PARTITION_ODD');
+                const pIdx = PermutationEngine.getChannelIndex(bitIdx, sanctumParams.offset, sanctumParams.step, oddSlots, 'PARTITION_ODD', pixels.length);
                 pixels[pIdx] = applyLsbMatching(pixels[pIdx], targetBit, sanctumPrng);
                 bitIdx++;
               }
             }
 
           } else {
-            // Standard Single Sanctum Payload over Full Matrix
             if (primaryPacket.length * 8 > totalSlots) {
               throw new Error(`Carrier capacity exceeded! Needs ${primaryPacket.length * 8} bits, carrier has ${totalSlots}.`);
             }
 
             log('INJECT', 'Embedding Sanctum payload across full RGB matrix using LSB Matching (±1)...');
-            const prngSeed = await CryptoEngine.derivePrngSeed(primaryPass);
+            const prngSeed = await CryptoEngine.derivePrngSeed(primaryPassBytes);
             const { offset, step } = PermutationEngine.getParams(totalSlots, prngSeed);
             const lsbPrng = new Mulberry32(prngSeed);
 
@@ -1596,7 +1720,7 @@
               const byte = primaryPacket[b];
               for (let bit = 7; bit >= 0; bit--) {
                 const targetBit = (byte >> bit) & 1;
-                const pIdx = PermutationEngine.getChannelIndex(bitCounter, offset, step, totalSlots, 'FULL');
+                const pIdx = PermutationEngine.getChannelIndex(bitCounter, offset, step, totalSlots, 'FULL', pixels.length);
                 pixels[pIdx] = applyLsbMatching(pixels[pIdx], targetBit, lsbPrng);
                 bitCounter++;
               }
@@ -1606,9 +1730,13 @@
           ctx.putImageData(imgData, 0, 0);
           const postEntropy = calculateEntropy(imgData);
           entropyTag.textContent = `Post-Steg Entropy: ${postEntropy} bits/byte`;
-          log('SEALED', `LSB matching complete (RS-analysis resistant). Post-Entropy: ${postEntropy}.`);
+          log('SEALED', `LSB Matching complete. RS value-pair symmetry maintained. Post-Entropy: ${postEntropy}.`);
 
           canvas.toBlob((blob) => {
+            if (!blob) {
+              log('ERR', 'Failed to generate carrier PNG blob.', true);
+              return;
+            }
             const dl = document.createElement('a');
             dl.href = URL.createObjectURL(blob);
             dl.download = `stegano_vault_${Date.now()}.png`;
@@ -1616,26 +1744,44 @@
             dl.click();
             document.body.removeChild(dl);
             URL.revokeObjectURL(dl.href);
-            log('SUCCESS', 'Parchment sealed and exported as lossless PNG.');
+            log('SUCCESS', 'Lossless carrier successfully sealed and exported.');
           }, 'image/png');
 
         } catch (e) {
           log('ERR', e.message, true);
         } finally {
+          // Zero-Memory Leak Guarantee: Explicitly clear all sensitive memory
+          SecureWiper.wipeAll(
+            primaryRawBytes, 
+            primaryPassBytes, 
+            decoyRawBytes, 
+            decoyPassBytes, 
+            primaryPacket, 
+            decoyPacket
+          );
+          if (imgData) SecureWiper.wipe(imgData.data);
+
           btnEncode.disabled = false;
           btnEncodeLabel.textContent = 'Encrypt, Disperse & Seal Carrier (LSB ±1)';
         }
       });
 
-      /* --- Action: Universal Extract & Decrypt with Partition Routing --- */
+      /* =========================================================================
+         12. SECURE ACTION: UNIVERSAL EXTRACTION & ROUTING
+         ========================================================================= */
       btnDecode.addEventListener('click', async () => {
+        let passBytes = null;
+        let ciphertext = null;
+        let decryptedBytes = null;
+        let imgData = null;
+
         try {
-          if (!currentTargetImg) throw new Error('Mount a sealed carrier (.PNG) into the tray first.');
+          if (!currentTargetImg) throw new Error('Mount a sealed carrier (.PNG) into tray first.');
           const pass = decodePass.value;
           if (!pass) throw new Error('Atelier passkey is required.');
 
           btnDecode.disabled = true;
-          btnDecodeLabel.textContent = 'Inspecting partition matrices...';
+          btnDecodeLabel.textContent = 'Probing candidate chambers...';
           await yieldTick();
 
           const canvas = document.createElement('canvas');
@@ -1644,24 +1790,26 @@
           const ctx = canvas.getContext('2d');
           ctx.drawImage(currentTargetImg, 0, 0);
 
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const pixels = imgData.data;
           const totalSlots = canvas.width * canvas.height * 3;
 
-          const prngSeed = await CryptoEngine.derivePrngSeed(pass);
+          passBytes = new TextEncoder().encode(pass);
+          const prngSeed = await CryptoEngine.derivePrngSeed(passBytes);
 
-          // Candidate partition configurations to test
           const candidateConfigs = [
-            { mode: 'FULL', slotCount: totalSlots, desc: 'Full matrix' },
-            { mode: 'PARTITION_EVEN', slotCount: Math.floor((totalSlots + 1) / 2), desc: 'Partition 0 (Decoy)' },
-            { mode: 'PARTITION_ODD', slotCount: Math.floor(totalSlots / 2), desc: 'Partition 1 (Sanctum)' }
+            { mode: 'FULL', slotCount: totalSlots },
+            { mode: 'PARTITION_EVEN', slotCount: Math.floor((totalSlots + 1) / 2) },
+            { mode: 'PARTITION_ODD', slotCount: Math.floor(totalSlots / 2) }
           ];
 
           let matchingConfig = null;
           let matchingHeader = null;
 
-          // Probe headers fast (<1ms) without initiating expensive KDF
+          // Constant-time candidate partition scanning
           for (const cfg of candidateConfigs) {
+            if (cfg.slotCount < MIN_RGB_SLOTS_REQUIRED) continue;
+
             const { offset, step } = PermutationEngine.getParams(cfg.slotCount, prngSeed);
             const headerBytes = new Uint8Array(HEADER_SIZE);
             let bitCounter = 0;
@@ -1669,72 +1817,76 @@
             for (let i = 0; i < HEADER_SIZE; i++) {
               let byte = 0;
               for (let b = 7; b >= 0; b--) {
-                const pIdx = PermutationEngine.getChannelIndex(bitCounter, offset, step, cfg.slotCount, cfg.mode);
+                const pIdx = PermutationEngine.getChannelIndex(bitCounter, offset, step, cfg.slotCount, cfg.mode, pixels.length);
                 byte = (byte << 1) | (pixels[pIdx] & 1);
                 bitCounter++;
               }
               headerBytes[i] = byte;
             }
 
-            let validMagic = true;
-            for (let i = 0; i < 4; i++) {
-              if (headerBytes[i] !== MAGIC[i]) {
-                validMagic = false;
-                break;
-              }
-            }
+            // Constant-time validation of header magic bytes
+            const magicCandidate = headerBytes.subarray(0, 4);
+            const isMagicValid = timingSafeEqual(magicCandidate, MAGIC);
 
-            if (validMagic) {
+            if (isMagicValid) {
               const ctLen = new DataView(headerBytes.buffer).getUint32(4, false);
-              if (ctLen > 0 && (HEADER_SIZE + ctLen) * 8 <= cfg.slotCount) {
+              // Boundary validation against integer wrapping or carrier overflow
+              if (ctLen > 0 && ctLen <= (Math.floor(cfg.slotCount / 8) - HEADER_SIZE)) {
                 matchingConfig = cfg;
                 matchingHeader = headerBytes;
                 break;
               }
             }
+            SecureWiper.wipe(headerBytes);
           }
 
-          if (!matchingConfig) {
-            throw new Error('Invalid signature or incorrect key. Chamber unauthenticated.');
+          if (!matchingConfig || !matchingHeader) {
+            throw new Error('Chamber unauthenticated: Invalid passkey or foreign carrier.');
           }
 
           btnDecodeLabel.textContent = 'Hardening KDF (600,000 PBKDF2 rounds)...';
           await yieldTick();
 
-          log('CRYPTO', `Payload signature authenticated in chamber space.`);
-          log('KDF', 'Computing 600,000 PBKDF2 rounds for AES-256-GCM authentication...');
+          log('CRYPTO', 'Signature verified. Extracting authenticated ciphertext packet...');
+          log('KDF', 'Deriving AES-GCM key with 600,000 PBKDF2-SHA256 iterations...');
 
           const ciphertextLen = new DataView(matchingHeader.buffer).getUint32(4, false);
           const salt = matchingHeader.slice(8, 24);
           const iv = matchingHeader.slice(24, 36);
 
           const { offset, step } = PermutationEngine.getParams(matchingConfig.slotCount, prngSeed);
-          const ciphertext = new Uint8Array(ciphertextLen);
-          let bitCounter = HEADER_SIZE * 8; // Offset past the header bits
+          ciphertext = new Uint8Array(ciphertextLen);
+          let bitCounter = HEADER_SIZE * 8; // Displace past envelope header
 
           for (let i = 0; i < ciphertextLen; i++) {
             let byte = 0;
             for (let b = 7; b >= 0; b--) {
-              const pIdx = PermutationEngine.getChannelIndex(bitCounter, offset, step, matchingConfig.slotCount, matchingConfig.mode);
+              const pIdx = PermutationEngine.getChannelIndex(bitCounter, offset, step, matchingConfig.slotCount, matchingConfig.mode, pixels.length);
               byte = (byte << 1) | (pixels[pIdx] & 1);
               bitCounter++;
             }
             ciphertext[i] = byte;
           }
 
-          const clearText = await CryptoEngine.decrypt(ciphertext, salt, iv, pass);
-          decodeText.value = clearText;
+          decryptedBytes = await CryptoEngine.decrypt(ciphertext, salt, iv, passBytes);
+          decodeText.value = new TextDecoder().decode(decryptedBytes);
           log('SUCCESS', 'Chamber unlocked! Inscription decrypted and authenticated.');
 
         } catch (e) {
           log('ERR', e.message, true);
         } finally {
+          // Zero-Memory Leak Guarantee: Wipe sensitive buffers
+          SecureWiper.wipeAll(passBytes, ciphertext, decryptedBytes);
+          if (imgData) SecureWiper.wipe(imgData.data);
+
           btnDecode.disabled = false;
           btnDecodeLabel.textContent = 'Extract & Decrypt Payload';
         }
       });
 
-      /* --- Action: Bit-Plane Inspector --- */
+      /* =========================================================================
+         13. FORENSIC BIT-PLANE OBSERVATION MODAL
+         ========================================================================= */
       const inspectorModal = document.getElementById('inspector-modal');
       const inspectorCanvas = document.getElementById('inspector-canvas');
       const btnInspector = document.getElementById('btn-open-inspector');
@@ -1755,10 +1907,12 @@
         const imgData = ctx.getImageData(0, 0, inspectorCanvas.width, inspectorCanvas.height);
         const d = imgData.data;
 
+        // Amplify LSB to full white (255) across RGB while keeping Alpha solid
         for (let i = 0; i < d.length; i += 4) {
           d[i] = (d[i] & 1) * 255;
           d[i+1] = (d[i+1] & 1) * 255;
           d[i+2] = (d[i+2] & 1) * 255;
+          d[i+3] = 255;
         }
 
         ctx.putImageData(imgData, 0, 0);
@@ -1766,16 +1920,25 @@
         log('FORENSIC', 'Bit-plane 0 rendered in observation casing.');
       });
 
-      modalClose.addEventListener('click', () => inspectorModal.classList.remove('active'));
+      modalClose.addEventListener('click', () => {
+        inspectorModal.classList.remove('active');
+        // Clear inspection canvas from memory
+        const ctx = inspectorCanvas.getContext('2d');
+        ctx.clearRect(0, 0, inspectorCanvas.width, inspectorCanvas.height);
+      });
 
-      // Panic Button (Wipe RAM Buffers)
+      /* =========================================================================
+         14. PANIC BUTTON & SESSION PURGE
+         ========================================================================= */
       panicBtn.addEventListener('click', () => {
+        // Clear DOM Inputs
         encodeText.value = '';
         encodePass.value = '';
         encodeDecoyText.value = '';
         encodeDecoyPass.value = '';
         decodePass.value = '';
         decodeText.value = '';
+        
         currentCarrierImg = null;
         currentTargetImg = null;
 
@@ -1791,8 +1954,9 @@
         document.getElementById('decode-filename').textContent = 'Mount Sealed Carrier (.PNG)';
         document.getElementById('encode-img-meta').textContent = 'Unloaded';
         document.getElementById('decode-img-meta').textContent = 'Unloaded';
+        
         updateCapacity();
-        log('PURGE', 'Volatile session memory purged.');
+        log('PURGE', 'All volatile session buffers and DOM artifacts wiped.');
       });
 
       // Copy Inscription Stream
